@@ -146,9 +146,10 @@ if (BUILD_CXX_LANGUAGE_PACKAGE)
 	set (CLANG_COMPILER_HEADER_SEARCH_PATH "")
 	foreach(LLVM_CONFIGURATION_TYPE ${LLVM_CONFIGURATION_TYPES})
 		if (CLANG_COMPILER_HEADER_SEARCH_PATH STREQUAL "")
+			# LLVM 20 uses major version only for the include path
 			set (_CLANG_HEADERS_SEARCH_LIST
-				"${LLVM_BINARY_DIR}/${LLVM_CONFIGURATION_TYPE}/lib/clang/${LLVM_VERSION}/include"
-				"${LLVM_BINARY_DIR}/${LLVM_CONFIGURATION_TYPE}/lib64/clang/${LLVM_VERSION}/include"
+				"${LLVM_BINARY_DIR}/${LLVM_CONFIGURATION_TYPE}/lib/clang/${LLVM_VERSION_MAJOR}/include"
+				"${LLVM_BINARY_DIR}/${LLVM_CONFIGURATION_TYPE}/lib64/clang/${LLVM_VERSION_MAJOR}/include"
 			)
 			foreach (_CLANG_HEADER_PATH ${_CLANG_HEADERS_SEARCH_LIST})
 				if (EXISTS ${_CLANG_HEADER_PATH})
@@ -366,8 +367,9 @@ configure_file(
 if (BUILD_CXX_LANGUAGE_PACKAGE)
 
 	set(CAPTURED_CMAKE_CXX_STANDARD ${CMAKE_CXX_STANDARD})
-	set(CMAKE_CXX_STANDARD 14)
-	
+	# LLVM 20 requires C++17
+	set(CMAKE_CXX_STANDARD 17)
+
 	add_library(${LIB_CXX_PROJECT_NAME} ${LIB_CXX_FILES})
 
 	create_source_groups(${LIB_CXX_FILES})
@@ -395,16 +397,14 @@ if (BUILD_CXX_LANGUAGE_PACKAGE)
         set(REQ_LLVM_LIBS LLVM)
     else()
         llvm_map_components_to_libnames(REQ_LLVM_LIBS
-            support core libdriver passes option
+            support core option passes targetparser
         )
         foreach(LLVM_TARGET ${LLVM_TARGETS_TO_BUILD})
-            get_property(lib_deps GLOBAL PROPERTY "LLVMBUILD_LIB_DEPS_LLVM${LLVM_TARGET}CodeGen")
-            list(APPEND REQ_LLVM_LIBS "LLVM${LLVM_TARGET}CodeGen")
-            list(APPEND REQ_LLVM_LIBS "${lib_deps}")
-            get_property(lib_deps GLOBAL PROPERTY "LLVMBUILD_LIB_DEPS_LLVM${LLVM_TARGET}AsmParser")
-            if (NOT "${lib_deps}" STREQUAL "")
+            if (TARGET "LLVM${LLVM_TARGET}CodeGen")
+                list(APPEND REQ_LLVM_LIBS "LLVM${LLVM_TARGET}CodeGen")
+            endif()
+            if (TARGET "LLVM${LLVM_TARGET}AsmParser")
                 list(APPEND REQ_LLVM_LIBS "LLVM${LLVM_TARGET}AsmParser")
-                list(APPEND REQ_LLVM_LIBS "${lib_deps}")
             endif()
         endforeach()
     endif()

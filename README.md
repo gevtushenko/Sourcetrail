@@ -138,11 +138,12 @@ Building Sourcetrail requires several dependencies to be in place on your machin
 
 ### Required dependencies
 
-* __LLVM/Clang 11.0.0__
+* __LLVM/Clang 20.x__
     * __Reason__: Used for running the preprocessor on the indexed source code, building and traversing an Abstract Syntax Tree and generating error messages.
-    * __Building__: Make sure to check out the correct tag: `git checkout llvmorg-11.0.0`
+    * __Building__: Make sure to check out the correct tag: `git checkout llvmorg-20.1.0` (or any 20.x release)
     * __Building for Windows__: Follow [these steps](https://clang.llvm.org/get_started.html) to build the project. Run the cmake command exactly as described.
     * __Building for Unix__: Follow this [installation guide](http://clang.llvm.org/docs/LibASTMatchersTutorial.html) to build the project. Make sure to build with `-DLLVM_ENABLE_RTTI=ON`.
+    * __Note__: The codebase also supports older LLVM versions (11+), but LLVM 20.x is recommended.
 
 ### Building
 

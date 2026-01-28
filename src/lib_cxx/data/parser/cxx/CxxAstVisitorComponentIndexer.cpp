@@ -1,5 +1,7 @@
 #include "CxxAstVisitorComponentIndexer.h"
 
+#include <optional>
+
 #include <clang/AST/ASTContext.h>
 #include <clang/Basic/SourceLocation.h>
 #include <clang/Basic/SourceManager.h>
@@ -164,8 +166,8 @@ void CxxAstVisitorComponentIndexer::beginTraverseLambdaCapture(
 {
 	if ((!lambdaExpr->isInitCapture(capture)) && (capture->capturesVariable()))
 	{
-		clang::VarDecl* d = capture->getCapturedVar();
-		if (utility::isLocalVariable(d) || utility::isParameter(d))
+		clang::VarDecl* d = clang::dyn_cast<clang::VarDecl>(capture->getCapturedVar());
+		if (d && (utility::isLocalVariable(d) || utility::isParameter(d)))
 		{
 			if (!d->getNameAsString().empty())	  // don't record anonymous parameters
 			{
@@ -915,17 +917,17 @@ ParseLocation CxxAstVisitorComponentIndexer::getSignatureLocation(clang::Functio
 
 		while (sm.isBeforeInTranslationUnit(endLoc, signatureRange.getEnd()))
 		{
-			llvm::Optional<clang::Token> token = clang::Lexer::findNextToken(endLoc, sm, opts);
-			if (token.hasValue())
+			std::optional<clang::Token> token = clang::Lexer::findNextToken(endLoc, sm, opts);
+			if (token.has_value())
 			{
-				const clang::tok::TokenKind tokenKind = token.getValue().getKind();
+				const clang::tok::TokenKind tokenKind = token->getKind();
 				if (tokenKind == clang::tok::l_brace || tokenKind == clang::tok::colon)
 				{
 					signatureRange.setEnd(endLoc);
 					return getParseLocation(signatureRange);
 				}
 
-				clang::SourceLocation nextEndLoc = token.getValue().getLocation();
+				clang::SourceLocation nextEndLoc = token->getLocation();
 				if (nextEndLoc == endLoc)
 				{
 					return ParseLocation();

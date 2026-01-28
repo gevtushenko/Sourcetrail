@@ -8,7 +8,7 @@
 #include <clang/Basic/Version.h>
 #include <llvm/Option/ArgList.h>
 #include <llvm/Support/TargetSelect.h>
-#include <llvm/Support/Host.h>
+#include <llvm/TargetParser/Host.h>
 
 #include "CxxCompilationDatabaseSingle.h"
 #include "CxxDiagnosticConsumer.h"
@@ -22,16 +22,9 @@ clang::driver::Driver* newDriver(
 	const char* BinaryName,
 	clang::IntrusiveRefCntPtr<llvm::vfs::FileSystem> VFS)
 {
-	#if CLANG_VERSION_MAJOR > 11
 	clang::driver::Driver* CompilerDriver = new clang::driver::Driver(
 		BinaryName, llvm::sys::getDefaultTargetTriple(), *Diagnostics,
 		"clang_based_tool", std::move(VFS));
-	#else
-	clang::driver::Driver* CompilerDriver = new clang::driver::Driver(
-		BinaryName, llvm::sys::getDefaultTargetTriple(), *Diagnostics,
-		std::move(VFS));
-	CompilerDriver->setTitle("clang_based_tool");
-	#endif
 	return CompilerDriver;
 }
 }	 // namespace
@@ -53,9 +46,9 @@ ClangInvocationInfo ClangInvocationInfo::getClangInvocationString(
 		const char* const BinaryName = Argv[0];
 		clang::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts = new clang::DiagnosticOptions();
 		unsigned MissingArgIndex, MissingArgCount;
-		llvm::opt::OptTable Opts = clang::driver::getDriverOptTable();
+		const llvm::opt::OptTable& Opts = clang::driver::getDriverOptTable();
 		llvm::opt::InputArgList ParsedArgs = Opts.ParseArgs(
-			clang::ArrayRef<const char*>(Argv).slice(1), MissingArgIndex, MissingArgCount);
+			llvm::ArrayRef<const char*>(Argv).slice(1), MissingArgIndex, MissingArgCount);
 		clang::ParseDiagnosticArgs(*DiagOpts, ParsedArgs);
 
 		llvm::raw_string_ostream diagnosticsStream(invocationInfo.errors);
@@ -70,11 +63,11 @@ ClangInvocationInfo ClangInvocationInfo::getClangInvocationString(
 			new clang::FileManager(clang::FileSystemOptions()));
 
 		const std::unique_ptr<clang::driver::Driver> Driver(
-			newDriver(&Diagnostics, BinaryName, &Files->getVirtualFileSystem()));
+			newDriver(&Diagnostics, BinaryName, Files->getVirtualFileSystemPtr()));
 		// Since the input might only be virtual, don't check whether it exists.
 		Driver->setCheckInputsExist(false);
 		const std::unique_ptr<clang::driver::Compilation> Compilation(
-			Driver->BuildCompilation(llvm::makeArrayRef(Argv)));
+			Driver->BuildCompilation(llvm::ArrayRef<const char*>(Argv)));
 
 		if (Compilation)
 		{

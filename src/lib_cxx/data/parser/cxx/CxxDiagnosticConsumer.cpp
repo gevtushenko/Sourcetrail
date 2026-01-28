@@ -81,9 +81,9 @@ void CxxDiagnosticConsumer::HandleDiagnostic(
 			}
 
 			clang::FileID clangFileId = sourceManager.getFileID(loc);
-			const clang::FileEntry* fileEntry = sourceManager.getFileEntryForID(clangFileId);
+			auto fileEntryRef = sourceManager.getFileEntryRefForID(clangFileId);
 
-			if (fileEntry != nullptr && fileEntry->isValid())
+			if (fileEntryRef)
 			{
 				ParseLocation location = utility::getParseLocation(
 					loc, sourceManager, nullptr, m_canonicalFilePathCache);
@@ -94,10 +94,10 @@ void CxxDiagnosticConsumer::HandleDiagnostic(
 			}
 			else
 			{
-				fileEntry = sourceManager.getFileEntryForID(sourceManager.getMainFileID());
-				if (fileEntry != nullptr && fileEntry->isValid())
+				auto mainFileEntryRef = sourceManager.getFileEntryRefForID(sourceManager.getMainFileID());
+				if (mainFileEntryRef)
 				{
-					filePath = m_canonicalFilePathCache->getCanonicalFilePath(fileEntry);
+					filePath = m_canonicalFilePathCache->getCanonicalFilePath(&mainFileEntryRef->getFileEntry());
 					fileId = m_client->recordFile(
 						filePath, false /*keeps the "indexed" state if the file already exists*/);
 					lineNumber = 1;

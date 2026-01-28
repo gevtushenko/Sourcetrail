@@ -262,10 +262,10 @@ std::unique_ptr<CxxDeclName> CxxDeclNameResolver::getDeclName(const clang::Named
 						clang::dyn_cast_or_null<clang::SubstTemplateTypeParmType>(
 							functionDecl->parameters()[i]->getType().getTypePtr()))
 				{
-					if (const clang::TemplateTypeParmType* templateParamType =
+					if (const clang::TemplateTypeParmDecl* templateParamDecl =
 							substType->getReplacedParameter())
 					{
-						if (templateParamType->isParameterPack())
+						if (templateParamDecl->isParameterPack())
 						{
 							parameterTypeNames.push_back(std::make_unique<CxxTypeName>(L"..."));
 							break;
@@ -314,7 +314,7 @@ std::unique_ptr<CxxDeclName> CxxDeclNameResolver::getDeclName(const clang::Named
 			clang::isa<clang::NamespaceDecl>(declaration) &&
 			clang::dyn_cast<clang::NamespaceDecl>(declaration)->isAnonymousNamespace())
 		{
-			declaration = clang::dyn_cast<clang::NamespaceDecl>(declaration)->getOriginalNamespace();
+			declaration = clang::dyn_cast<clang::NamespaceDecl>(declaration)->getFirstDecl();
 			return std::make_unique<CxxDeclName>(getNameForAnonymousSymbol(L"namespace", declaration));
 		}
 		else if (clang::isa<clang::EnumDecl>(declaration) && declNameString.empty())
