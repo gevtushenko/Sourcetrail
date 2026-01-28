@@ -205,12 +205,10 @@ DEF_TRAVERSE_TYPE_PTR(Stmt, {}, {})
 // additionally: skip implicit CXXRecordDecls (this does not skip template specializations).
 bool CxxAstVisitor::TraverseCXXRecordDecl(clang::CXXRecordDecl* d)
 {
-	if (utility::isImplicit(d) && d->getMemberSpecializationInfo() == nullptr &&
-		!clang::isa<clang::ClassTemplateSpecializationDecl>(utility::getFirstDecl(d)))
-	{
-		return true;
-	}
-
+	// Check for lambdas FIRST, before the isImplicit check.
+	// Lambdas inside function template instantiations are marked as implicit
+	// (because their parent function is implicit), but we still need to traverse them
+	// to capture call chains inside generic lambdas.
 	if (d->isLambda())
 	{
 		clang::CXXMethodDecl* callOp = d->getLambdaCallOperator();
@@ -234,6 +232,13 @@ bool CxxAstVisitor::TraverseCXXRecordDecl(clang::CXXRecordDecl* d)
 			}
 		}
 
+		return true;
+	}
+
+	// Skip other implicit CXXRecordDecls (but not template specializations)
+	if (utility::isImplicit(d) && d->getMemberSpecializationInfo() == nullptr &&
+		!clang::isa<clang::ClassTemplateSpecializationDecl>(utility::getFirstDecl(d)))
+	{
 		return true;
 	}
 
