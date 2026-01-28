@@ -213,7 +213,28 @@ bool CxxAstVisitor::TraverseCXXRecordDecl(clang::CXXRecordDecl* d)
 
 	if (d->isLambda())
 	{
-		return TraverseFunctionDecl(d->getLambdaCallOperator());
+		clang::CXXMethodDecl* callOp = d->getLambdaCallOperator();
+		if (!callOp)
+		{
+			return true;
+		}
+
+		// Traverse the primary call operator
+		TraverseFunctionDecl(callOp);
+
+		// For generic lambdas (with auto parameters), also traverse instantiations.
+		// The template body contains dependent code that isn't indexed.
+		// By traversing instantiations, we capture resolved calls.
+		if (clang::FunctionTemplateDecl* templateDecl = callOp->getDescribedFunctionTemplate())
+		{
+			for (clang::FunctionDecl* spec : templateDecl->specializations())
+			{
+				// Use TraverseDecl to ensure proper context setup via beginTraverseDecl
+				TraverseDecl(spec);
+			}
+		}
+
+		return true;
 	}
 
 	WalkUpFromCXXRecordDecl(d);

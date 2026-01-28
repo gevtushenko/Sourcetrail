@@ -203,6 +203,14 @@ std::unique_ptr<CxxDeclName> CxxDeclNameResolver::getDeclName(const clang::Named
 			if ((clang::dyn_cast_or_null<clang::CXXMethodDecl>(functionDecl)) &&
 				(clang::dyn_cast_or_null<clang::CXXMethodDecl>(functionDecl)->getParent()->isLambda()))
 			{
+				// For generic lambda instantiations, use the template pattern to ensure
+				// consistent symbol naming. This way the template and all instantiations
+				// get the same symbol ID, preserving the call chain.
+				if (const clang::FunctionDecl* pattern = functionDecl->getTemplateInstantiationPattern())
+				{
+					functionDecl = pattern;
+				}
+
 				const clang::SourceManager& sourceManager =
 					declaration->getASTContext().getSourceManager();
 				const clang::PresumedLoc& presumedBegin = sourceManager.getPresumedLoc(
