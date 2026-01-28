@@ -1136,6 +1136,9 @@ std::shared_ptr<Graph> PersistentStorage::getGraphForActiveTokenIds(
 				nodeIds.push_back(elementId);
 				edgeIds.clear();
 
+				// Collect template specialization IDs to aggregate their edges
+				std::vector<Id> templateSpecializationIds;
+
 				for (const StorageEdge& edge:
 					 m_sqliteIndexStorage.getEdgesBySourceOrTargetId(elementId))
 				{
@@ -1143,6 +1146,14 @@ std::shared_ptr<Graph> PersistentStorage::getGraphForActiveTokenIds(
 					if (edgeType == Edge::EDGE_MEMBER)
 					{
 						continue;
+					}
+
+					// Track template specializations where this node is the template
+					// EDGE_TEMPLATE_SPECIALIZATION goes from specialization (source) to template (target).
+					if (edgeType == Edge::EDGE_TEMPLATE_SPECIALIZATION &&
+						edge.targetNodeId == elementId)
+					{
+						templateSpecializationIds.push_back(edge.sourceNodeId);
 					}
 
 					if (nodeType.isUsable() && (edgeType & Edge::EDGE_TYPE_USAGE) &&
@@ -1155,6 +1166,36 @@ std::shared_ptr<Graph> PersistentStorage::getGraphForActiveTokenIds(
 					else
 					{
 						edgeIds.push_back(edge.id);
+					}
+				}
+
+				// For function/method templates, also include edges from all their
+				// instantiations so the caller/callee graph shows the combined view.
+				// This makes "show callee graph" and "show caller graph" aggregate
+				// calls across all template instantiations.
+				if (nodeType.isCallable() && !templateSpecializationIds.empty())
+				{
+					for (Id specId : templateSpecializationIds)
+					{
+						nodeIds.push_back(specId);
+						for (const StorageEdge& edge:
+							 m_sqliteIndexStorage.getEdgesBySourceOrTargetId(specId))
+						{
+							Edge::EdgeType edgeType = Edge::intToType(edge.type);
+							if (edgeType == Edge::EDGE_MEMBER)
+							{
+								continue;
+							}
+							// Include call edges, usage edges, and template specialization edges
+							// from specializations. This shows both what the instantiations call
+							// and what uses the instantiations.
+							if (edgeType == Edge::EDGE_CALL || edgeType == Edge::EDGE_USAGE ||
+								edgeType == Edge::EDGE_TYPE_USAGE ||
+								edgeType == Edge::EDGE_TEMPLATE_SPECIALIZATION)
+							{
+								edgeIds.push_back(edge.id);
+							}
+						}
 					}
 				}
 
@@ -1301,6 +1342,19 @@ std::shared_ptr<Graph> PersistentStorage::getGraphForTrail(
 	size_t currentDepth = 0;
 
 	std::vector<Id> nodeIdsToProcess = {*nodeIds.begin()};
+
+	// For function templates, also start from all their specializations
+	// so the caller/callee trail includes calls to all instantiations.
+	Id startId = originId ? originId : targetId;
+	for (const StorageEdge& edge : m_sqliteIndexStorage.getEdgesBySourceOrTargetId(startId))
+	{
+		if (Edge::intToType(edge.type) == Edge::EDGE_TEMPLATE_SPECIALIZATION &&
+			edge.targetNodeId == startId)
+		{
+			nodeIds.insert(edge.sourceNodeId);
+			nodeIdsToProcess.push_back(edge.sourceNodeId);
+		}
+	}
 
 	struct TrailNode
 	{
