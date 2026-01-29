@@ -1547,6 +1547,98 @@ std::shared_ptr<Graph> PersistentStorage::getGraphForTrail(
 		}
 	}
 
+	// For caller/callee graphs of function templates, transform specializations to templates.
+	// This only applies when viewing call relationships (EDGE_CALL) and when the starting node
+	// is a function template (has template specializations).
+	bool isCallGraph = (edgeTypes & Edge::EDGE_CALL) != 0;
+	bool startNodeHasSpecializations = false;
+	for (const StorageEdge& edge : m_sqliteIndexStorage.getEdgesBySourceOrTargetId(startId))
+	{
+		if (Edge::intToType(edge.type) == Edge::EDGE_TEMPLATE_SPECIALIZATION &&
+			edge.targetNodeId == startId)
+		{
+			startNodeHasSpecializations = true;
+			break;
+		}
+	}
+
+	if (isCallGraph && startNodeHasSpecializations)
+	{
+		// Transform specializations to templates for cleaner display.
+		std::map<Id, Id> specToTemplate;
+		for (Id nodeId : nodeIds)
+		{
+			for (const StorageEdge& edge : m_sqliteIndexStorage.getEdgesBySourceOrTargetId(nodeId))
+			{
+				if (Edge::intToType(edge.type) == Edge::EDGE_TEMPLATE_SPECIALIZATION &&
+					edge.sourceNodeId == nodeId)
+				{
+					specToTemplate[nodeId] = edge.targetNodeId;
+					break;
+				}
+			}
+		}
+
+		// Replace specializations with templates in nodeIds
+		std::set<Id> transformedNodeIds;
+		for (Id nodeId : nodeIds)
+		{
+			auto it = specToTemplate.find(nodeId);
+			if (it != specToTemplate.end())
+			{
+				transformedNodeIds.insert(it->second);  // Use template
+			}
+			else
+			{
+				transformedNodeIds.insert(nodeId);  // Not a specialization, keep as-is
+			}
+		}
+		nodeIds = transformedNodeIds;
+		
+		// Build graph with template nodes and remapped edges
+		std::shared_ptr<Graph> graph = std::make_shared<Graph>();
+		
+		// First add all template nodes
+		addNodesToGraph(utility::toVector(nodeIds), graph.get(), false);
+		
+		// Now add edges, remapping endpoints from specializations to templates
+		std::set<std::pair<Id, Id>> addedEdges;  // To avoid duplicate edges
+		for (Id edgeId : edgeIds)
+		{
+			StorageEdge storageEdge = m_sqliteIndexStorage.getFirstById<StorageEdge>(edgeId);
+			if (storageEdge.id == 0) continue;
+			
+			// Map source and target to their templates
+			Id sourceId = storageEdge.sourceNodeId;
+			Id targetId = storageEdge.targetNodeId;
+			
+			auto srcIt = specToTemplate.find(sourceId);
+			if (srcIt != specToTemplate.end()) sourceId = srcIt->second;
+			
+			auto tgtIt = specToTemplate.find(targetId);
+			if (tgtIt != specToTemplate.end()) targetId = tgtIt->second;
+			
+			// Skip if this template edge was already added
+			auto edgePair = std::make_pair(sourceId, targetId);
+			if (addedEdges.find(edgePair) != addedEdges.end()) continue;
+			addedEdges.insert(edgePair);
+			
+			// Get the template nodes and create edge between them
+			Node* sourceNode = graph->getNodeById(sourceId);
+			Node* targetNode = graph->getNodeById(targetId);
+			
+			if (sourceNode && targetNode)
+			{
+				Edge::EdgeType type = Edge::intToType(storageEdge.type);
+				graph->createEdge(edgeId, type, sourceNode, targetNode);
+			}
+		}
+		
+		addComponentAccessToGraph(graph.get());
+		addComponentIsAmbiguousToGraph(graph.get());
+		return graph;
+	}
+
 	std::shared_ptr<Graph> graph = std::make_shared<Graph>();
 
 	addNodesWithParentsAndEdgesToGraph(
