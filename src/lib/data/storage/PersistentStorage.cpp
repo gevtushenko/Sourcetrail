@@ -1346,6 +1346,7 @@ std::shared_ptr<Graph> PersistentStorage::getGraphForTrail(
 	// For function templates, also start from all their specializations
 	// so the caller/callee trail includes calls to all instantiations.
 	Id startId = originId ? originId : targetId;
+	bool startNodeIsTemplate = false;
 	for (const StorageEdge& edge : m_sqliteIndexStorage.getEdgesBySourceOrTargetId(startId))
 	{
 		if (Edge::intToType(edge.type) == Edge::EDGE_TEMPLATE_SPECIALIZATION &&
@@ -1353,7 +1354,15 @@ std::shared_ptr<Graph> PersistentStorage::getGraphForTrail(
 		{
 			nodeIds.insert(edge.sourceNodeId);
 			nodeIdsToProcess.push_back(edge.sourceNodeId);
+			startNodeIsTemplate = true;
 		}
+	}
+	
+	// Also include usage edges in the caller graph
+	// so that usages like "auto ptr = foo<int>;" appear as callers
+	if (edgeTypes & Edge::EDGE_CALL)
+	{
+		edgeTypes = edgeTypes | Edge::EDGE_USAGE;
 	}
 
 	struct TrailNode
@@ -1550,7 +1559,7 @@ std::shared_ptr<Graph> PersistentStorage::getGraphForTrail(
 	// For caller/callee graphs of function templates, transform specializations to templates.
 	// This only applies when viewing call relationships (EDGE_CALL) and when the starting node
 	// is a function template (has template specializations).
-	bool isCallGraph = (edgeTypes & Edge::EDGE_CALL) != 0;
+	bool isCallGraph = (edgeTypes & (Edge::EDGE_CALL | Edge::EDGE_USAGE)) != 0;
 	bool startNodeHasSpecializations = false;
 	for (const StorageEdge& edge : m_sqliteIndexStorage.getEdgesBySourceOrTargetId(startId))
 	{
